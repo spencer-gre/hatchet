@@ -42,12 +42,10 @@ class PerfFlowAspectReader:
             frame = Frame({"name": name, "type": "function", "ts": ts, "dur": dur})
             node = Node(frame, parent=None, hnid=-1)
 
-			# check the relationships between node and roots
+            # check the relationships between node and roots
             for root in reversed(roots):
-                # if node is a parent of root node
-                if (ts < root.frame["ts"]) and (
-                    ts + dur > root.frame["ts"] + root.frame["dur"]
-                ):
+                # if node is a parent of root node 
+                if (ts < root.frame["ts"]) and (ts + dur > root.frame["ts"] + root.frame["dur"]):
                     node.add_child(root)
                     root.add_parent(node)
                     roots.pop()

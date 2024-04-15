@@ -377,7 +377,7 @@ class GraphFrame:
         # import this lazily to avoid circular dependencies
         from .readers.hdf5_reader import HDF5Reader
 
-        return HDF5Reader(filename).read()
+        return HDF5Reader(filename).read(**kwargs)
 
     @staticmethod
     def from_perfflowaspect(filename):

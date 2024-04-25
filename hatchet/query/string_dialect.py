@@ -18,7 +18,7 @@ from .query import Query
 
 
 # PEG grammar for the String-based dialect
-CYPHER_GRAMMAR = u"""
+CYPHER_GRAMMAR = """
 FullQuery: path_expr=MatchExpr(cond_expr=WhereExpr)?;
 MatchExpr: 'MATCH' path=PathQuery;
 PathQuery: '(' nodes=NodeExpr ')'('->' '(' nodes=NodeExpr ')')*;
@@ -32,26 +32,28 @@ OrCond: 'OR' subcond=UnaryCond;
 UnaryCond: NotCond | SingleCond;
 NotCond: 'NOT' subcond=SingleCond;
 SingleCond: StringCond | NumberCond | NoneCond | NotNoneCond | LeafCond | NotLeafCond;
-NoneCond: name=ID '.' prop=STRING 'IS NONE';
-NotNoneCond: name=ID '.' prop=STRING 'IS NOT NONE';
+NoneCond: name=ID '.' prop=MetricId 'IS NONE';
+NotNoneCond: name=ID '.' prop=MetricId 'IS NOT NONE';
 LeafCond: name=ID 'IS LEAF';
 NotLeafCond: name=ID 'IS NOT LEAF';
 StringCond: StringEq | StringStartsWith | StringEndsWith | StringContains | StringMatch;
-StringEq: name=ID '.' prop=STRING '=' val=STRING;
-StringStartsWith: name=ID '.' prop=STRING 'STARTS WITH' val=STRING;
-StringEndsWith: name=ID '.' prop=STRING 'ENDS WITH' val=STRING;
-StringContains: name=ID '.' prop=STRING 'CONTAINS' val=STRING;
-StringMatch: name=ID '.' prop=STRING '=~' val=STRING;
+StringEq: name=ID '.' prop=MetricId '=' val=STRING;
+StringStartsWith: name=ID '.' prop=MetricId 'STARTS WITH' val=STRING;
+StringEndsWith: name=ID '.' prop=MetricId 'ENDS WITH' val=STRING;
+StringContains: name=ID '.' prop=MetricId 'CONTAINS' val=STRING;
+StringMatch: name=ID '.' prop=MetricId '=~' val=STRING;
 NumberCond: NumEq | NumLt | NumGt | NumLte | NumGte | NumNan | NumNotNan | NumInf | NumNotInf;
-NumEq: name=ID '.' prop=STRING '=' val=NUMBER;
-NumLt: name=ID '.' prop=STRING '<' val=NUMBER;
-NumGt: name=ID '.' prop=STRING '>' val=NUMBER;
-NumLte: name=ID '.' prop=STRING '<=' val=NUMBER;
-NumGte: name=ID '.' prop=STRING '>=' val=NUMBER;
-NumNan: name=ID '.' prop=STRING 'IS NAN';
-NumNotNan: name=ID '.' prop=STRING 'IS NOT NAN';
-NumInf: name=ID '.' prop=STRING 'IS INF';
-NumNotInf: name=ID '.' prop=STRING 'IS NOT INF';
+NumEq: name=ID '.' prop=MetricId '=' val=NUMBER;
+NumLt: name=ID '.' prop=MetricId '<' val=NUMBER;
+NumGt: name=ID '.' prop=MetricId '>' val=NUMBER;
+NumLte: name=ID '.' prop=MetricId '<=' val=NUMBER;
+NumGte: name=ID '.' prop=MetricId '>=' val=NUMBER;
+NumNan: name=ID '.' prop=MetricId 'IS NAN';
+NumNotNan: name=ID '.' prop=MetricId 'IS NOT NAN';
+NumInf: name=ID '.' prop=MetricId 'IS INF';
+NumNotInf: name=ID '.' prop=MetricId 'IS NOT INF';
+MetricId: '(' ids+=SingleMetricId[','] ')' | ids=SingleMetricId;
+SingleMetricId: INT | STRING;
 """
 
 # TextX metamodel for the String-based dialect
@@ -85,8 +87,14 @@ def filter_check_types(type_check, df_row, filt_lambda):
         return False
 
 
-class StringQuery(Query):
+########################################################################
+# NOTE: the use of single and double quotes in processing string-dialect
+#       queries is EXTREMELY important. Inner strings (e.g., for metric
+#       names) MUST use single quotes.
+########################################################################
 
+
+class StringQuery(Query):
     """Class for representing and parsing queries using the String-based dialect."""
 
     def __init__(self, cypher_query, multi_index_mode="off"):
@@ -275,14 +283,14 @@ class StringQuery(Query):
 
     def _parse_none(self, obj):
         """Parses 'property IS NONE'."""
-        if obj.prop == "depth":
+        if len(obj.prop.ids) == 1 and obj.prop.ids[0] == "depth":
             return [
                 None,
                 obj.name,
                 "df_row.name._depth is None",
                 None,
             ]
-        if obj.prop == "node_id":
+        if len(obj.prop.ids) == 1 and obj.prop.ids[0] == "node_id":
             return [
                 None,
                 obj.name,
@@ -292,7 +300,11 @@ class StringQuery(Query):
         return [
             None,
             obj.name,
-            'df_row["{}"] is None'.format(obj.prop),
+            "df_row[{}] is None".format(
+                str(tuple(obj.prop.ids))
+                if len(obj.prop.ids) > 1
+                else "'{}'".format(obj.prop.ids[0])
+            ),
             None,
         ]
 
@@ -302,47 +314,43 @@ class StringQuery(Query):
         return predicate + ".all()"
 
     def _parse_none_multi_idx(self, obj):
-        if obj.prop == "depth":
+        if len(obj.prop.ids) == 1 and obj.prop.ids[0] == "depth":
             return [
                 None,
                 obj.name,
                 "df_row.index.get_level_values('node')[0]._depth is None",
                 None,
             ]
-        if obj.prop == "node_id":
+        if len(obj.prop.ids) == 1 and obj.prop.ids[0] == "node_id":
             return [
                 None,
                 obj.name,
                 "df_row.index.get_level_values('node')[0]._hatchet_nid is None",
                 None,
             ]
-        if self.multi_index_mode == "any":
-            return [
-                None,
-                obj.name,
-                "df_row['{}'].apply(lambda elem: elem is None).any()".format(obj.prop),
-                None,
-            ]
-        # if self.multi_index_mode == "all":
         return [
             None,
             obj.name,
             self._add_aggregation_call_to_multi_idx_predicate(
-                "df_row['{}'].apply(lambda elem: elem is None)".format(obj.prop)
+                "df_row[{}].apply(lambda elem: elem is None)".format(
+                    str(tuple(obj.prop.ids))
+                    if len(obj.prop.ids) > 1
+                    else "'{}'".format(obj.prop.ids[0])
+                )
             ),
             None,
         ]
 
     def _parse_not_none(self, obj):
         """Parses 'property IS NOT NONE'."""
-        if obj.prop == "depth":
+        if len(obj.prop.ids) == 1 and obj.prop.ids[0] == "depth":
             return [
                 None,
                 obj.name,
                 "df_row.name._depth is not None",
                 None,
             ]
-        if obj.prop == "node_id":
+        if len(obj.prop.ids) == 1 and obj.prop.ids[0] == "node_id":
             return [
                 None,
                 obj.name,
@@ -352,19 +360,23 @@ class StringQuery(Query):
         return [
             None,
             obj.name,
-            'df_row["{}"] is not None'.format(obj.prop),
+            "df_row[{}] is not None".format(
+                str(tuple(obj.prop.ids))
+                if len(obj.prop.ids) > 1
+                else "'{}'".format(obj.prop.ids[0])
+            ),
             None,
         ]
 
     def _parse_not_none_multi_idx(self, obj):
-        if obj.prop == "depth":
+        if len(obj.prop.ids) == 1 and obj.prop.ids[0] == "depth":
             return [
                 None,
                 obj.name,
                 "df_row.index.get_level_values('node')[0]._depth is not None",
                 None,
             ]
-        if obj.prop == "node_id":
+        if len(obj.prop.ids) == 1 and obj.prop.ids[0] == "node_id":
             return [
                 None,
                 obj.name,
@@ -375,7 +387,11 @@ class StringQuery(Query):
             None,
             obj.name,
             self._add_aggregation_call_to_multi_idx_predicate(
-                "df_row['{}'].apply(lambda elem: elem is not None)".format(obj.prop)
+                "df_row[{}].apply(lambda elem: elem is not None)".format(
+                    str(tuple(obj.prop.ids))
+                    if len(obj.prop.ids) > 1
+                    else "'{}'".format(obj.prop.ids[0])
+                )
             ),
             None,
         ]
@@ -465,8 +481,17 @@ class StringQuery(Query):
         return [
             None,
             obj.name,
-            'df_row["{}"] == "{}"'.format(obj.prop, obj.val),
-            "isinstance(df_row['{}'], str)".format(obj.prop),
+            'df_row[{}] == "{}"'.format(
+                str(tuple(obj.prop.ids))
+                if len(obj.prop.ids) > 1
+                else "'{}'".format(obj.prop.ids[0]),
+                obj.val,
+            ),
+            "isinstance(df_row[{}], str)".format(
+                str(tuple(obj.prop.ids))
+                if len(obj.prop.ids) > 1
+                else "'{}'".format(obj.prop.ids[0])
+            ),
         ]
 
     def _parse_str_eq_multi_idx(self, obj):
@@ -474,11 +499,18 @@ class StringQuery(Query):
             None,
             obj.name,
             self._add_aggregation_call_to_multi_idx_predicate(
-                'df_row["{}"].apply(lambda elem: elem == "{}")'.format(
-                    obj.prop, obj.val
+                'df_row[{}].apply(lambda elem: elem == "{}")'.format(
+                    str(tuple(obj.prop.ids))
+                    if len(obj.prop.ids) > 1
+                    else "'{}'".format(obj.prop.ids[0]),
+                    obj.val,
                 )
             ),
-            "is_string_dtype(df_row['{}'])".format(obj.prop),
+            "is_string_dtype(df_row[{}])".format(
+                str(tuple(obj.prop.ids))
+                if len(obj.prop.ids) > 1
+                else "'{}'".format(obj.prop.ids[0])
+            ),
         ]
 
     def _parse_str_starts_with(self, obj):
@@ -486,8 +518,17 @@ class StringQuery(Query):
         return [
             None,
             obj.name,
-            'df_row["{}"].startswith("{}")'.format(obj.prop, obj.val),
-            "isinstance(df_row['{}'], str)".format(obj.prop),
+            'df_row[{}].startswith("{}")'.format(
+                str(tuple(obj.prop.ids))
+                if len(obj.prop.ids) > 1
+                else "'{}'".format(obj.prop.ids[0]),
+                obj.val,
+            ),
+            "isinstance(df_row[{}], str)".format(
+                str(tuple(obj.prop.ids))
+                if len(obj.prop.ids) > 1
+                else "'{}'".format(obj.prop.ids[0])
+            ),
         ]
 
     def _parse_str_starts_with_multi_idx(self, obj):
@@ -495,11 +536,18 @@ class StringQuery(Query):
             None,
             obj.name,
             self._add_aggregation_call_to_multi_idx_predicate(
-                'df_row["{}"].apply(lambda elem: elem.startswith("{}"))'.format(
-                    obj.prop, obj.val
+                'df_row[{}].apply(lambda elem: elem.startswith("{}"))'.format(
+                    str(tuple(obj.prop.ids))
+                    if len(obj.prop.ids) > 1
+                    else "'{}'".format(obj.prop.ids[0]),
+                    obj.val,
                 )
             ),
-            "is_string_dtype(df_row['{}'])".format(obj.prop),
+            "is_string_dtype(df_row[{}])".format(
+                str(tuple(obj.prop.ids))
+                if len(obj.prop.ids) > 1
+                else "'{}'".format(obj.prop.ids[0])
+            ),
         ]
 
     def _parse_str_ends_with(self, obj):
@@ -507,8 +555,17 @@ class StringQuery(Query):
         return [
             None,
             obj.name,
-            'df_row["{}"].endswith("{}")'.format(obj.prop, obj.val),
-            "isinstance(df_row['{}'], str)".format(obj.prop),
+            'df_row[{}].endswith("{}")'.format(
+                str(tuple(obj.prop.ids))
+                if len(obj.prop.ids) > 1
+                else "'{}'".format(obj.prop.ids[0]),
+                obj.val,
+            ),
+            "isinstance(df_row[{}], str)".format(
+                str(tuple(obj.prop.ids))
+                if len(obj.prop.ids) > 1
+                else "'{}'".format(obj.prop.ids[0])
+            ),
         ]
 
     def _parse_str_ends_with_multi_idx(self, obj):
@@ -516,11 +573,18 @@ class StringQuery(Query):
             None,
             obj.name,
             self._add_aggregation_call_to_multi_idx_predicate(
-                'df_row["{}"].apply(lambda elem: elem.endswith("{}"))'.format(
-                    obj.prop, obj.val
+                'df_row[{}].apply(lambda elem: elem.endswith("{}"))'.format(
+                    str(tuple(obj.prop.ids))
+                    if len(obj.prop.ids) > 1
+                    else "'{}'".format(obj.prop.ids[0]),
+                    obj.val,
                 )
             ),
-            "is_string_dtype(df_row['{}'])".format(obj.prop),
+            "is_string_dtype(df_row[{}])".format(
+                str(tuple(obj.prop.ids))
+                if len(obj.prop.ids) > 1
+                else "'{}'".format(obj.prop.ids[0])
+            ),
         ]
 
     def _parse_str_contains(self, obj):
@@ -528,8 +592,17 @@ class StringQuery(Query):
         return [
             None,
             obj.name,
-            '"{}" in df_row["{}"]'.format(obj.val, obj.prop),
-            "isinstance(df_row['{}'], str)".format(obj.prop),
+            '"{}" in df_row[{}]'.format(
+                obj.val,
+                str(tuple(obj.prop.ids))
+                if len(obj.prop.ids) > 1
+                else "'{}'".format(obj.prop.ids[0]),
+            ),
+            "isinstance(df_row[{}], str)".format(
+                str(tuple(obj.prop.ids))
+                if len(obj.prop.ids) > 1
+                else "'{}'".format(obj.prop.ids[0])
+            ),
         ]
 
     def _parse_str_contains_multi_idx(self, obj):
@@ -537,11 +610,18 @@ class StringQuery(Query):
             None,
             obj.name,
             self._add_aggregation_call_to_multi_idx_predicate(
-                'df_row["{}"].apply(lambda elem: "{}" in elem)'.format(
-                    obj.prop, obj.val
+                'df_row[{}].apply(lambda elem: "{}" in elem)'.format(
+                    str(tuple(obj.prop.ids))
+                    if len(obj.prop.ids) > 1
+                    else "'{}'".format(obj.prop.ids[0]),
+                    obj.val,
                 )
             ),
-            "is_string_dtype(df_row['{}'])".format(obj.prop),
+            "is_string_dtype(df_row[{}])".format(
+                str(tuple(obj.prop.ids))
+                if len(obj.prop.ids) > 1
+                else "'{}'".format(obj.prop.ids[0])
+            ),
         ]
 
     def _parse_str_match(self, obj):
@@ -549,8 +629,17 @@ class StringQuery(Query):
         return [
             None,
             obj.name,
-            're.match("{}", df_row["{}"]) is not None'.format(obj.val, obj.prop),
-            "isinstance(df_row['{}'], str)".format(obj.prop),
+            're.match("{}", df_row[{}]) is not None'.format(
+                obj.val,
+                str(tuple(obj.prop.ids))
+                if len(obj.prop.ids) > 1
+                else "'{}'".format(obj.prop.ids[0]),
+            ),
+            "isinstance(df_row[{}], str)".format(
+                str(tuple(obj.prop.ids))
+                if len(obj.prop.ids) > 1
+                else "'{}'".format(obj.prop.ids[0])
+            ),
         ]
 
     def _parse_str_match_multi_idx(self, obj):
@@ -558,11 +647,18 @@ class StringQuery(Query):
             None,
             obj.name,
             self._add_aggregation_call_to_multi_idx_predicate(
-                'df_row["{}"].apply(lambda elem: re.match("{}", elem) is not None)'.format(
-                    obj.prop, obj.val
+                'df_row[{}].apply(lambda elem: re.match("{}", elem) is not None)'.format(
+                    str(tuple(obj.prop.ids))
+                    if len(obj.prop.ids) > 1
+                    else "'{}'".format(obj.prop.ids[0]),
+                    obj.val,
                 )
             ),
-            "is_string_dtype(df_row['{}'])".format(obj.prop),
+            "is_string_dtype(df_row[{}])".format(
+                str(tuple(obj.prop.ids))
+                if len(obj.prop.ids) > 1
+                else "'{}'".format(obj.prop.ids[0])
+            ),
         ]
 
     def _parse_num(self, obj):
@@ -591,7 +687,7 @@ class StringQuery(Query):
 
     def _parse_num_eq(self, obj):
         """Processes numeric equivalence predicates."""
-        if obj.prop == "depth":
+        if len(obj.prop.ids) == 1 and obj.prop.ids[0] == "depth":
             if obj.val == -1:
                 return [
                     None,
@@ -623,7 +719,7 @@ class StringQuery(Query):
                 "df_row.name._depth == {}".format(obj.val),
                 "isinstance(df_row.name._depth, Real)",
             ]
-        if obj.prop == "node_id":
+        if len(obj.prop.ids) == 1 and obj.prop.ids[0] == "node_id":
             if obj.val < 0:
                 warnings.warn(
                     """
@@ -651,12 +747,21 @@ class StringQuery(Query):
         return [
             None,
             obj.name,
-            'df_row["{}"] == {}'.format(obj.prop, obj.val),
-            "isinstance(df_row['{}'], Real)".format(obj.prop),
+            "df_row[{}] == {}".format(
+                str(tuple(obj.prop.ids))
+                if len(obj.prop.ids) > 1
+                else "'{}'".format(obj.prop.ids[0]),
+                obj.val,
+            ),
+            "isinstance(df_row[{}], Real)".format(
+                str(tuple(obj.prop.ids))
+                if len(obj.prop.ids) > 1
+                else "'{}'".format(obj.prop.ids[0])
+            ),
         ]
 
     def _parse_num_eq_multi_idx(self, obj):
-        if obj.prop == "depth":
+        if len(obj.prop.ids) == 1 and obj.prop.ids[0] == "depth":
             if obj.val == -1:
                 return [
                     None,
@@ -688,7 +793,7 @@ class StringQuery(Query):
                 "df_row.index.get_level_values('node')[0]._depth == {}".format(obj.val),
                 "isinstance(df_row.index.get_level_values('node')[0]._depth, Real)",
             ]
-        if obj.prop == "node_id":
+        if len(obj.prop.ids) == 1 and obj.prop.ids[0] == "node_id":
             if obj.val < 0:
                 warnings.warn(
                     """
@@ -719,14 +824,23 @@ class StringQuery(Query):
             None,
             obj.name,
             self._add_aggregation_call_to_multi_idx_predicate(
-                'df_row["{}"].apply(lambda elem: elem == {})'.format(obj.prop, obj.val)
+                "df_row[{}].apply(lambda elem: elem == {})".format(
+                    str(tuple(obj.prop.ids))
+                    if len(obj.prop.ids) > 1
+                    else "'{}'".format(obj.prop.ids[0]),
+                    obj.val,
+                )
             ),
-            "is_numeric_dtype(df_row['{}'])".format(obj.prop),
+            "is_numeric_dtype(df_row[{}])".format(
+                str(tuple(obj.prop.ids))
+                if len(obj.prop.ids) > 1
+                else "'{}'".format(obj.prop.ids[0])
+            ),
         ]
 
     def _parse_num_lt(self, obj):
         """Processes numeric less-than predicates."""
-        if obj.prop == "depth":
+        if len(obj.prop.ids) == 1 and obj.prop.ids[0] == "depth":
             if obj.val < 0:
                 warnings.warn(
                     """
@@ -751,7 +865,7 @@ class StringQuery(Query):
                 "df_row.name._depth < {}".format(obj.val),
                 "isinstance(df_row.name._depth, Real)",
             ]
-        if obj.prop == "node_id":
+        if len(obj.prop.ids) == 1 and obj.prop.ids[0] == "node_id":
             if obj.val < 0:
                 warnings.warn(
                     """
@@ -779,12 +893,21 @@ class StringQuery(Query):
         return [
             None,
             obj.name,
-            'df_row["{}"] < {}'.format(obj.prop, obj.val),
-            "isinstance(df_row['{}'], Real)".format(obj.prop),
+            "df_row[{}] < {}".format(
+                str(tuple(obj.prop.ids))
+                if len(obj.prop.ids) > 1
+                else "'{}'".format(obj.prop.ids[0]),
+                obj.val,
+            ),
+            "isinstance(df_row[{}], Real)".format(
+                str(tuple(obj.prop.ids))
+                if len(obj.prop.ids) > 1
+                else "'{}'".format(obj.prop.ids[0])
+            ),
         ]
 
     def _parse_num_lt_multi_idx(self, obj):
-        if obj.prop == "depth":
+        if len(obj.prop.ids) == 1 and obj.prop.ids[0] == "depth":
             if obj.val < 0:
                 warnings.warn(
                     """
@@ -809,7 +932,7 @@ class StringQuery(Query):
                 "df_row.index.get_level_values('node')[0]._depth < {}".format(obj.val),
                 "isinstance(df_row.index.get_level_values('node')[0]._depth, Real)",
             ]
-        if obj.prop == "node_id":
+        if len(obj.prop.ids) == 1 and obj.prop.ids[0] == "node_id":
             if obj.val < 0:
                 warnings.warn(
                     """
@@ -840,14 +963,23 @@ class StringQuery(Query):
             None,
             obj.name,
             self._add_aggregation_call_to_multi_idx_predicate(
-                'df_row["{}"].apply(lambda elem: elem < {})'.format(obj.prop, obj.val)
+                "df_row[{}].apply(lambda elem: elem < {})".format(
+                    str(tuple(obj.prop.ids))
+                    if len(obj.prop.ids) > 1
+                    else "'{}'".format(obj.prop.ids[0]),
+                    obj.val,
+                )
             ),
-            "is_numeric_dtype(df_row['{}'])".format(obj.prop),
+            "is_numeric_dtype(df_row[{}])".format(
+                str(tuple(obj.prop.ids))
+                if len(obj.prop.ids) > 1
+                else "'{}'".format(obj.prop.ids[0])
+            ),
         ]
 
     def _parse_num_gt(self, obj):
         """Processes numeric greater-than predicates."""
-        if obj.prop == "depth":
+        if len(obj.prop.ids) == 1 and obj.prop.ids[0] == "depth":
             if obj.val < 0:
                 warnings.warn(
                     """
@@ -872,7 +1004,7 @@ class StringQuery(Query):
                 "df_row.name._depth > {}".format(obj.val),
                 "isinstance(df_row.name._depth, Real)",
             ]
-        if obj.prop == "node_id":
+        if len(obj.prop.ids) == 1 and obj.prop.ids[0] == "node_id":
             if obj.val < 0:
                 warnings.warn(
                     """
@@ -900,12 +1032,21 @@ class StringQuery(Query):
         return [
             None,
             obj.name,
-            'df_row["{}"] > {}'.format(obj.prop, obj.val),
-            "isinstance(df_row['{}'], Real)".format(obj.prop),
+            "df_row[{}] > {}".format(
+                str(tuple(obj.prop.ids))
+                if len(obj.prop.ids) > 1
+                else "'{}'".format(obj.prop.ids[0]),
+                obj.val,
+            ),
+            "isinstance(df_row[{}], Real)".format(
+                str(tuple(obj.prop.ids))
+                if len(obj.prop.ids) > 1
+                else "'{}'".format(obj.prop.ids[0])
+            ),
         ]
 
     def _parse_num_gt_multi_idx(self, obj):
-        if obj.prop == "depth":
+        if len(obj.prop.ids) == 1 and obj.prop.ids[0] == "depth":
             if obj.val < 0:
                 warnings.warn(
                     """
@@ -930,7 +1071,7 @@ class StringQuery(Query):
                 "df_row.index.get_level_values('node')[0]._depth > {}".format(obj.val),
                 "isinstance(df_row.index.get_level_values('node')[0]._depth, Real)",
             ]
-        if obj.prop == "node_id":
+        if len(obj.prop.ids) == 1 and obj.prop.ids[0] == "node_id":
             if obj.val < 0:
                 warnings.warn(
                     """
@@ -961,14 +1102,23 @@ class StringQuery(Query):
             None,
             obj.name,
             self._add_aggregation_call_to_multi_idx_predicate(
-                'df_row["{}"].apply(lambda elem: elem > {})'.format(obj.prop, obj.val)
+                "df_row[{}].apply(lambda elem: elem > {})".format(
+                    str(tuple(obj.prop.ids))
+                    if len(obj.prop.ids) > 1
+                    else "'{}'".format(obj.prop.ids[0]),
+                    obj.val,
+                )
             ),
-            "is_numeric_dtype(df_row['{}'])".format(obj.prop),
+            "is_numeric_dtype(df_row[{}])".format(
+                str(tuple(obj.prop.ids))
+                if len(obj.prop.ids) > 1
+                else "'{}'".format(obj.prop.ids[0])
+            ),
         ]
 
     def _parse_num_lte(self, obj):
         """Processes numeric less-than-or-equal-to predicates."""
-        if obj.prop == "depth":
+        if len(obj.prop.ids) == 1 and obj.prop.ids[0] == "depth":
             if obj.val < 0:
                 warnings.warn(
                     """
@@ -993,7 +1143,7 @@ class StringQuery(Query):
                 "df_row.name._depth <= {}".format(obj.val),
                 "isinstance(df_row.name._depth, Real)",
             ]
-        if obj.prop == "node_id":
+        if len(obj.prop.ids) == 1 and obj.prop.ids[0] == "node_id":
             if obj.val < 0:
                 warnings.warn(
                     """
@@ -1021,12 +1171,21 @@ class StringQuery(Query):
         return [
             None,
             obj.name,
-            'df_row["{}"] <= {}'.format(obj.prop, obj.val),
-            "isinstance(df_row['{}'], Real)".format(obj.prop),
+            "df_row[{}] <= {}".format(
+                str(tuple(obj.prop.ids))
+                if len(obj.prop.ids) > 1
+                else "'{}'".format(obj.prop.ids[0]),
+                obj.val,
+            ),
+            "isinstance(df_row[{}], Real)".format(
+                str(tuple(obj.prop.ids))
+                if len(obj.prop.ids) > 1
+                else "'{}'".format(obj.prop.ids[0])
+            ),
         ]
 
     def _parse_num_lte_multi_idx(self, obj):
-        if obj.prop == "depth":
+        if len(obj.prop.ids) == 1 and obj.prop.ids[0] == "depth":
             if obj.val < 0:
                 warnings.warn(
                     """
@@ -1051,7 +1210,7 @@ class StringQuery(Query):
                 "df_row.index.get_level_values('node')[0]._depth <= {}".format(obj.val),
                 "isinstance(df_row.index.get_level_values('node')[0]._depth, Real)",
             ]
-        if obj.prop == "node_id":
+        if len(obj.prop.ids) == 1 and obj.prop.ids[0] == "node_id":
             if obj.val < 0:
                 warnings.warn(
                     """
@@ -1082,14 +1241,23 @@ class StringQuery(Query):
             None,
             obj.name,
             self._add_aggregation_call_to_multi_idx_predicate(
-                'df_row["{}"].apply(lambda elem: elem <= {})'.format(obj.prop, obj.val)
+                "df_row[{}].apply(lambda elem: elem <= {})".format(
+                    str(tuple(obj.prop.ids))
+                    if len(obj.prop.ids) > 1
+                    else "'{}'".format(obj.prop.ids[0]),
+                    obj.val,
+                )
             ),
-            "is_numeric_dtype(df_row['{}'])".format(obj.prop),
+            "is_numeric_dtype(df_row[{}])".format(
+                str(tuple(obj.prop.ids))
+                if len(obj.prop.ids) > 1
+                else "'{}'".format(obj.prop.ids[0])
+            ),
         ]
 
     def _parse_num_gte(self, obj):
         """Processes numeric greater-than-or-equal-to predicates."""
-        if obj.prop == "depth":
+        if len(obj.prop.ids) == 1 and obj.prop.ids[0] == "depth":
             if obj.val < 0:
                 warnings.warn(
                     """
@@ -1114,7 +1282,7 @@ class StringQuery(Query):
                 "df_row.name._depth >= {}".format(obj.val),
                 "isinstance(df_row.name._depth, Real)",
             ]
-        if obj.prop == "node_id":
+        if len(obj.prop.ids) == 1 and obj.prop.ids[0] == "node_id":
             if obj.val < 0:
                 warnings.warn(
                     """
@@ -1142,12 +1310,21 @@ class StringQuery(Query):
         return [
             None,
             obj.name,
-            'df_row["{}"] >= {}'.format(obj.prop, obj.val),
-            "isinstance(df_row['{}'], Real)".format(obj.prop),
+            "df_row[{}] >= {}".format(
+                str(tuple(obj.prop.ids))
+                if len(obj.prop.ids) > 1
+                else "'{}'".format(obj.prop.ids[0]),
+                obj.val,
+            ),
+            "isinstance(df_row[{}], Real)".format(
+                str(tuple(obj.prop.ids))
+                if len(obj.prop.ids) > 1
+                else "'{}'".format(obj.prop.ids[0])
+            ),
         ]
 
     def _parse_num_gte_multi_idx(self, obj):
-        if obj.prop == "depth":
+        if len(obj.prop.ids) == 1 and obj.prop.ids[0] == "depth":
             if obj.val < 0:
                 warnings.warn(
                     """
@@ -1172,7 +1349,7 @@ class StringQuery(Query):
                 "df_row.index.get_level_values('node')[0]._depth >= {}".format(obj.val),
                 "isinstance(df_row.index.get_level_values('node')[0]._depth, Real)",
             ]
-        if obj.prop == "node_id":
+        if len(obj.prop.ids) == 1 and obj.prop.ids == "node_id":
             if obj.val < 0:
                 warnings.warn(
                     """
@@ -1203,21 +1380,30 @@ class StringQuery(Query):
             None,
             obj.name,
             self._add_aggregation_call_to_multi_idx_predicate(
-                'df_row["{}"].apply(lambda elem: elem >= {})'.format(obj.prop, obj.val)
+                "df_row[{}].apply(lambda elem: elem >= {})".format(
+                    str(tuple(obj.prop.ids))
+                    if len(obj.prop.ids) > 1
+                    else "'{}'".format(obj.prop.ids[0]),
+                    obj.val,
+                )
             ),
-            "is_numeric_dtype(df_row['{}'])".format(obj.prop),
+            "is_numeric_dtype(df_row[{}])".format(
+                str(tuple(obj.prop.ids))
+                if len(obj.prop.ids) > 1
+                else "'{}'".format(obj.prop.ids[0])
+            ),
         ]
 
     def _parse_num_nan(self, obj):
         """Processes predicates that check for NaN."""
-        if obj.prop == "depth":
+        if len(obj.prop.ids) == 1 and obj.prop.ids[0] == "depth":
             return [
                 None,
                 obj.name,
                 "pd.isna(df_row.name._depth)",
                 "isinstance(df_row.name._depth, Real)",
             ]
-        if obj.prop == "node_id":
+        if len(obj.prop.ids) == 1 and obj.prop.ids[0] == "node_id":
             return [
                 None,
                 obj.name,
@@ -1227,19 +1413,27 @@ class StringQuery(Query):
         return [
             None,
             obj.name,
-            'pd.isna(df_row["{}"])'.format(obj.prop),
-            "isinstance(df_row['{}'], Real)".format(obj.prop),
+            "pd.isna(df_row[{}])".format(
+                str(tuple(obj.prop.ids))
+                if len(obj.prop.ids) > 1
+                else "'{}'".format(obj.prop.ids[0])
+            ),
+            "isinstance(df_row[{}], Real)".format(
+                str(tuple(obj.prop.ids))
+                if len(obj.prop.ids) > 1
+                else "'{}'".format(obj.prop.ids[0])
+            ),
         ]
 
     def _parse_num_nan_multi_idx(self, obj):
-        if obj.prop == "depth":
+        if len(obj.prop.ids) == 1 and obj.prop.ids[0] == "depth":
             return [
                 None,
                 obj.name,
                 "pd.isna(df_row.index.get_level_values('node')[0]._depth)",
                 "isinstance(df_row.index.get_level_values('node')[0]._depth, Real)",
             ]
-        if obj.prop == "node_id":
+        if len(obj.prop.ids) == 1 and obj.prop.ids[0] == "node_id":
             return [
                 None,
                 obj.name,
@@ -1250,21 +1444,29 @@ class StringQuery(Query):
             None,
             obj.name,
             self._add_aggregation_call_to_multi_idx_predicate(
-                'pd.isna(df_row["{}"])'.format(obj.prop)
+                "pd.isna(df_row[{}])".format(
+                    str(tuple(obj.prop.ids))
+                    if len(obj.prop.ids) > 1
+                    else "'{}'".format(obj.prop.ids[0])
+                )
             ),
-            "is_numeric_dtype(df_row['{}'])".format(obj.prop),
+            "is_numeric_dtype(df_row[{}])".format(
+                str(tuple(obj.prop.ids))
+                if len(obj.prop.ids) > 1
+                else "'{}'".format(obj.prop.ids[0])
+            ),
         ]
 
     def _parse_num_not_nan(self, obj):
         """Processes predicates that check for NaN."""
-        if obj.prop == "depth":
+        if len(obj.prop.ids) == 1 and obj.prop.ids[0] == "depth":
             return [
                 None,
                 obj.name,
                 "not pd.isna(df_row.name._depth)",
                 "isinstance(df_row.name._depth, Real)",
             ]
-        if obj.prop == "node_id":
+        if len(obj.prop.ids) == 1 and obj.prop.ids[0] == "node_id":
             return [
                 None,
                 obj.name,
@@ -1274,19 +1476,27 @@ class StringQuery(Query):
         return [
             None,
             obj.name,
-            'not pd.isna(df_row["{}"])'.format(obj.prop),
-            "isinstance(df_row['{}'], Real)".format(obj.prop),
+            "not pd.isna(df_row[{}])".format(
+                str(tuple(obj.prop.ids))
+                if len(obj.prop.ids) > 1
+                else "'{}'".format(obj.prop.ids[0])
+            ),
+            "isinstance(df_row[{}], Real)".format(
+                str(tuple(obj.prop.ids))
+                if len(obj.prop.ids) > 1
+                else "'{}'".format(obj.prop.ids[0])
+            ),
         ]
 
     def _parse_num_not_nan_multi_idx(self, obj):
-        if obj.prop == "depth":
+        if len(obj.prop.ids) == 1 and obj.prop.ids[0] == "depth":
             return [
                 None,
                 obj.name,
                 "not pd.isna(df_row.index.get_level_values('node')[0]._depth)",
                 "isinstance(df_row.index.get_level_values('node')[0]._depth, Real)",
             ]
-        if obj.prop == "node_id":
+        if len(obj.prop.ids) == 1 and obj.prop.ids[0] == "node_id":
             return [
                 None,
                 obj.name,
@@ -1297,21 +1507,29 @@ class StringQuery(Query):
             None,
             obj.name,
             self._add_aggregation_call_to_multi_idx_predicate(
-                'not pd.isna(df_row["{}"])'.format(obj.prop)
+                "not pd.isna(df_row[{}])".format(
+                    str(tuple(obj.prop.ids))
+                    if len(obj.prop.ids) > 1
+                    else "'{}'".format(obj.prop.ids[0])
+                )
             ),
-            "is_numeric_dtype(df_row['{}'])".format(obj.prop),
+            "is_numeric_dtype(df_row[{}])".format(
+                str(tuple(obj.prop.ids))
+                if len(obj.prop.ids) > 1
+                else "'{}'".format(obj.prop.ids[0])
+            ),
         ]
 
     def _parse_num_inf(self, obj):
         """Processes predicates that check for Infinity."""
-        if obj.prop == "depth":
+        if len(obj.prop.ids) == 1 and obj.prop.ids[0] == "depth":
             return [
                 None,
                 obj.name,
                 "np.isinf(df_row.name._depth)",
                 "isinstance(df_row.name._depth, Real)",
             ]
-        if obj.prop == "node_id":
+        if len(obj.prop.ids) == 1 and obj.prop.ids[0] == "node_id":
             return [
                 None,
                 obj.name,
@@ -1321,19 +1539,27 @@ class StringQuery(Query):
         return [
             None,
             obj.name,
-            'np.isinf(df_row["{}"])'.format(obj.prop),
-            "isinstance(df_row['{}'], Real)".format(obj.prop),
+            "np.isinf(df_row[{}])".format(
+                str(tuple(obj.prop.ids))
+                if len(obj.prop.ids) > 1
+                else "'{}'".format(obj.prop.ids[0])
+            ),
+            "isinstance(df_row[{}], Real)".format(
+                str(tuple(obj.prop.ids))
+                if len(obj.prop.ids) > 1
+                else "'{}'".format(obj.prop.ids[0])
+            ),
         ]
 
     def _parse_num_inf_multi_idx(self, obj):
-        if obj.prop == "depth":
+        if len(obj.prop.ids) == 1 and obj.prop.ids[0] == "depth":
             return [
                 None,
                 obj.name,
                 "np.isinf(df_row.index.get_level_values('node')[0]._depth)",
                 "isinstance(df_row.index.get_level_values('node')[0]._depth, Real)",
             ]
-        if obj.prop == "node_id":
+        if len(obj.prop.ids) == 1 and obj.prop.ids[0] == "node_id":
             return [
                 None,
                 obj.name,
@@ -1344,21 +1570,29 @@ class StringQuery(Query):
             None,
             obj.name,
             self._add_aggregation_call_to_multi_idx_predicate(
-                'np.isinf(df_row["{}"])'.format(obj.prop)
+                "np.isinf(df_row[{}])".format(
+                    str(tuple(obj.prop.ids))
+                    if len(obj.prop.ids) > 1
+                    else "'{}'".format(obj.prop.ids[0])
+                )
             ),
-            "is_numeric_dtype(df_row['{}'])".format(obj.prop),
+            "is_numeric_dtype(df_row[{}])".format(
+                str(tuple(obj.prop.ids))
+                if len(obj.prop.ids) > 1
+                else "'{}'".format(obj.prop.ids[0])
+            ),
         ]
 
     def _parse_num_not_inf(self, obj):
         """Processes predicates that check for not-Infinity."""
-        if obj.prop == "depth":
+        if len(obj.prop.ids) == 1 and obj.prop.ids[0] == "depth":
             return [
                 None,
                 obj.name,
                 "not np.isinf(df_row.name._depth)",
                 "isinstance(df_row.name._depth, Real)",
             ]
-        if obj.prop == "node_id":
+        if len(obj.prop.ids) == 1 and obj.prop.ids[0] == "node_id":
             return [
                 None,
                 obj.name,
@@ -1368,19 +1602,27 @@ class StringQuery(Query):
         return [
             None,
             obj.name,
-            'not np.isinf(df_row["{}"])'.format(obj.prop),
-            "isinstance(df_row['{}'], Real)".format(obj.prop),
+            "not np.isinf(df_row[{}])".format(
+                str(tuple(obj.prop.ids))
+                if len(obj.prop.ids) > 1
+                else "'{}'".format(obj.prop.ids[0])
+            ),
+            "isinstance(df_row[{}], Real)".format(
+                str(tuple(obj.prop.ids))
+                if len(obj.prop.ids) > 1
+                else "'{}'".format(obj.prop.ids[0])
+            ),
         ]
 
     def _parse_num_not_inf_multi_idx(self, obj):
-        if obj.prop == "depth":
+        if len(obj.prop.ids) == 1 and obj.prop.ids[0] == "depth":
             return [
                 None,
                 obj.name,
                 "not np.isinf(df_row.index.get_level_values('node')[0]._depth)",
                 "isinstance(df_row.index.get_level_values('node')[0]._depth, Real)",
             ]
-        if obj.prop == "node_id":
+        if len(obj.prop.ids) == 1 and obj.prop.ids[0] == "node_id":
             return [
                 None,
                 obj.name,
@@ -1391,9 +1633,17 @@ class StringQuery(Query):
             None,
             obj.name,
             self._add_aggregation_call_to_multi_idx_predicate(
-                'not np.isinf(df_row["{}"])'.format(obj.prop)
+                "not np.isinf(df_row[{}])".format(
+                    str(tuple(obj.prop.ids))
+                    if len(obj.prop.ids) > 1
+                    else "'{}'".format(obj.prop.ids[0])
+                )
             ),
-            "is_numeric_dtype(df_row['{}'])".format(obj.prop),
+            "is_numeric_dtype(df_row[{}])".format(
+                str(tuple(obj.prop.ids))
+                if len(obj.prop.ids) > 1
+                else "'{}'".format(obj.prop.ids[0])
+            ),
         ]
 
 

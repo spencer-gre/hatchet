@@ -35,39 +35,6 @@ jobs:
           name: hatchet_build_artifacts_wheels_linux_3
           path: ./wheelhouse/*.whl
 
-  # TODO: uncomment if/when we decide to build wheels for macOS
-  # build_wheels_macos_36_37:
-  #   name: Build wheels for Python 3.6 and 3.7 on macOS
-  #   runs-on: macos-12
-  #   steps:
-  #     - uses: actions/checkout@v3
-
-  #     - uses: pypa/cibuildwheel@v2.12.1
-  #       env:
-  #         CIBW_SKIP: pp*
-  #         CIBW_ARCHS_MACOS: x86_64
-  #         CIBW_PROJECT_REQUIRES_PYTHON: ">=3.6,<3.8"
-
-  #     - uses: actions/upload-artifact@v3
-  #       with:
-  #         path: ./wheelhouse/*.whl
-
-  # build_wheels_macos_38_plus:
-  #   name: Build wheels for Python 3.8+ on macOS
-  #   runs-on: macos-12
-  #   steps:
-  #     - uses: actions/checkout@v3
-
-  #     - uses: pypa/cibuildwheel@v2.12.1
-  #       env:
-  #         CIBW_SKIP: pp*
-  #         CIBW_ARCHS_MACOS: x86_64 universal2 arm64
-  #         CIBW_PROJECT_REQUIRES_PYTHON: ">=3.8"
-
-  #     - uses: actions/upload-artifact@v3
-  #       with:
-  #         path: ./wheelhouse/*.whl
-
   build_sdist:
     name: Build sdist
     runs-on: ubuntu-20.04
@@ -80,7 +47,7 @@ jobs:
       - name: Build sdist
         run: python -m build -s
 
-      - uses: actions/upload-artifact@v3
+      - uses: actions/upload-artifact@v4
         with:
           name: hatchet_build_artifacts_sdist
           path: dist/*.tar.gz
@@ -99,6 +66,10 @@ jobs:
           pattern: hatchet_build_artifacts_*
           merge-multiple: true
           path: dist
+          
+      - name: Check build artifacts
+        run: |
+          ls -lah dist
 
       - uses: pypa/gh-action-pypi-publish@release/v1
         with:
@@ -125,9 +96,9 @@ jobs:
         run: |
           ls -lah dist
 
-      # - uses: pypa/gh-action-pypi-publish@release/v1
-      #   with:
-      #     user: __token__
-      #     password: ${{ secrets.PYPI_API_TOKEN }}
-      #     # Uncomment the line below if you want to upload to PyPI
-      #     # repository_url: https://test.pypi.org/legacy/
+      - uses: pypa/gh-action-pypi-publish@release/v1
+        with:
+          user: __token__
+          password: ${{ secrets.PYPI_API_TOKEN }}
+          # Uncomment the line below if you want to upload to PyPI
+          # repository_url: https://test.pypi.org/legacy/

@@ -10,9 +10,10 @@ import hatchet as ht
 
 if __name__ == "__main__":
     # pfa_file = "../../../hatchet/tests/data/perfflow.quartz1532.3570764-1iter.pfw"
-    pfa_file = "../../../hatchet/tests/data/laghos_1iter.pfw"
+    # pfa_file = "../../../hatchet/tests/data/laghos_1iter.pfw"
+    pfa_file = "../../../hatchet/tests/data/perfflowaspect-object/object-reader.pfw"
 
-    gf = ht.GraphFrame.from_perfflowaspect(pfa_file)
+    gf = ht.GraphFrame.from_perfflowaspect_object(pfa_file)
 
     # Printout the DataFrame component of the GraphFrame.
     print(gf.dataframe)

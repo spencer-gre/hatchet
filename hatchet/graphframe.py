@@ -383,8 +383,15 @@ class GraphFrame:
     def from_perfflowaspect(filename):
         # import this lazily to avoid circular dependencies
         from .readers.perfflowaspect_reader import PerfFlowAspectReader
-
+        
         return PerfFlowAspectReader(filename).read()
+    
+    @staticmethod
+    def from_perfflowaspect_object(filename):
+		# import this lazily to avoid circular dependencies
+        from .readers.perfflowaspectobject_reader import PerfFlowAspectObjectReader
+
+        return PerfFlowAspectObjectReader(filename).read()
 
     def to_hdf(self, filename, key="hatchet_graphframe", **kwargs):
         # import this lazily to avoid circular dependencies

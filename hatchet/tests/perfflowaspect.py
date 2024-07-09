@@ -4,6 +4,8 @@
 # SPDX-License-Identifier: MIT
 
 import numpy as np
+import pytest
+import os
 
 from hatchet import GraphFrame
 
@@ -57,3 +59,21 @@ def test_ams_mpi_graphframe(ams_mpi_perfflowaspect_array):
             assert gf.dataframe[col].dtype == object
 
     # TODO: add tests to confirm values in dataframe
+    
+@pytest.fixture
+def perfflowaspectobjectreader_test_file():
+    base_dir = os.path.dirname(__file__)
+    return os.path.join(base_dir, 'data', 'perfflowaspect-ams', 'objectreader_test.pfw')
+
+def test_perfflowaspectobjectreader(perfflowaspectobjectreader_test_file):
+    gf = GraphFrame.from_perfflowaspect_object(str(perfflowaspectobjectreader_test_file))
+
+    assert len(gf.dataframe.groupby("name")) > 0
+
+    for col in gf.dataframe.columns:
+        if col in ("ts", "dur"):
+            assert gf.dataframe[col].dtype == np.float64
+        elif col in ("pid", "tid"):
+            assert gf.dataframe[col].dtype == np.int64
+        elif col in ("name", "ph"):
+            assert gf.dataframe[col].dtype == object

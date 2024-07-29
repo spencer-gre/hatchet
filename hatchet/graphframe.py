@@ -380,15 +380,15 @@ class GraphFrame:
         return HDF5Reader(filename).read(**kwargs)
 
     @staticmethod
-    def from_perfflowaspect(filename):
+    def from_perfflowaspect_array(filename, scan_memory=False, scan_cpu=False):
         # import this lazily to avoid circular dependencies
-        from .readers.perfflowaspect_reader import PerfFlowAspectReader
-        
-        return PerfFlowAspectReader(filename).read()
-    
+        from .readers.perfflowaspect_array_reader import PerfFlowAspectArrayReader
+
+        return PerfFlowAspectArrayReader(filename, scan_memory, scan_cpu).read()
+
     @staticmethod
     def from_perfflowaspect_object(filename):
-		# import this lazily to avoid circular dependencies
+        # import this lazily to avoid circular dependencies
         from .readers.perfflowaspect_object_reader import PerfFlowAspectObjectReader
 
         return PerfFlowAspectObjectReader(filename).read()

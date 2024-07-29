@@ -1183,6 +1183,18 @@ def caliper_timeseries_cali(data_dir, tmpdir):
 
 
 @pytest.fixture
+def laghos_perfflowaspect_array(data_dir, tmpdir):
+    """Builds a temporary directory containing the laghos PerfFlowAspect file."""
+    pfa_dir = os.path.join(data_dir, "perfflowaspect-laghos")
+    pfa_file = os.path.join(pfa_dir, "laghos_1iter.pfw")
+
+    shutil.copy(pfa_file, str(tmpdir))
+    tmpfile = os.path.join(str(tmpdir), "laghos_1iter.pfw")
+    
+    return tmpfile
+
+
+@pytest.fixture
 def caliper_timeseries_spot_cali(data_dir, tmpdir):
     """Builds a temporary directory containing the duplicate value node-ordered lulesh JSON file."""
     ordered_json_dir = os.path.join(data_dir, "caliper-timeseries-cali")
@@ -1192,6 +1204,7 @@ def caliper_timeseries_spot_cali(data_dir, tmpdir):
     tmpfile = os.path.join(str(tmpdir), "spot_timeseries.cali")
 
 
+@pytest.fixture
 def laghos_perfflowaspect_array(data_dir, tmpdir):
     """Builds a temporary directory containing the laghos PerfFlowAspect file."""
     pfa_dir = os.path.join(data_dir, "perfflowaspect-laghos")
@@ -1203,69 +1216,14 @@ def laghos_perfflowaspect_array(data_dir, tmpdir):
     return tmpfile
 
 
-def write_file(data_dir):
-    filename = "ams_mpi_allranks.pfw"
-    pfa_dir = os.path.join(data_dir, "perfflowaspect-ams/ams_mpi_test1")
-    path = os.path.join(pfa_dir, filename)
-    print("RRR", path)
-
-    with open(pfa_dir + "/perfflow.lassen19.108800.pfw", "r") as ifile0:
-        nlines0 = len(ifile0.readlines())
-
-    with open(pfa_dir + "/perfflow.lassen19.108801.pfw", "r") as ifile1:
-        nlines1 = len(ifile1.readlines())
-
-    with open(pfa_dir + "/perfflow.lassen19.108802.pfw", "r") as ifile2:
-        nlines2 = len(ifile2.readlines())
-
-    with open(path, "w") as f:
-        f.write("[")
-        f.write("\n")
-
-        with open(pfa_dir + "/perfflow.lassen19.108800.pfw", "r") as ifile0:
-            count = 1
-            for line in ifile0:
-                if count != 1 and count < nlines0:
-                    f.write(line.rstrip())
-                    if count == (nlines0 - 1):
-                        f.write(",")
-                    f.write("\n")
-                count += 1
-
-        with open(pfa_dir + "/perfflow.lassen19.108801.pfw", "r") as ifile1:
-            count = 1
-            for line in ifile1:
-                if count != 1 and count < nlines1:
-                    f.write(line.rstrip())
-                    if count == (nlines1 - 1):
-                        f.write(",")
-                    f.write("\n")
-                count += 1
-
-        with open(pfa_dir + "/perfflow.lassen19.108802.pfw", "r") as ifile2:
-            count = 1
-            for line in ifile2:
-                if count != 1 and count < nlines2:
-                    f.write(line.rstrip())
-                    f.write("\n")
-                count += 1
-
-        f.write("]")
-
-    return path
-
-
 @pytest.fixture
-def ams_mpi_perfflowaspect_array(data_dir, tmpdir):
-    """Builds a temporary directory containing the AMS PerfFlowAspect file."""
-    pfa_dir = os.path.join(data_dir, "perfflowaspect-ams/ams_mpi_test1")
-    write_file(data_dir)
-    pfa_file = os.path.join(pfa_dir, "ams_mpi_allranks.pfw")
-    with open(pfa_file) as f:
-        s = f.read()
+def foobar_perfflowaspect_array(data_dir, tmpdir):
+    """Builds a temporary directory containing the foobar PerfFlowAspect file."""
+    pfa_dir = os.path.join(data_dir, "perfflowaspect-foobar")
+    pfa_file = os.path.join(pfa_dir, "perfflow.quartz1532.3570764-1iter.pfw")
 
     shutil.copy(pfa_file, str(tmpdir))
-    tmpfile = os.path.join(str(tmpdir), "ams_mpi_allranks.pfw")
+    tmpfile = os.path.join(str(tmpdir), "perfflow.quartz1532.3570764-1iter.pfw")
 
     return tmpfile
 
@@ -1335,3 +1293,75 @@ def ams_mpi_perfflowaspect_array(data_dir, tmpdir):
     tmpfile = os.path.join(str(tmpdir), "ams_mpi_allranks.pfw")
 
     return tmpfile
+
+
+def write_file(data_dir):
+    filename = "ams_mpi_allranks.pfw"
+    pfa_dir = os.path.join(data_dir, "perfflowaspect-ams/ams_mpi_test1")
+    path = os.path.join(pfa_dir, filename)
+    print("RRR", path)
+
+    with open(pfa_dir + "/perfflow.lassen19.108800.pfw", "r") as ifile0:
+        nlines0 = len(ifile0.readlines())
+
+    with open(pfa_dir + "/perfflow.lassen19.108801.pfw", "r") as ifile1:
+        nlines1 = len(ifile1.readlines())
+
+    with open(pfa_dir + "/perfflow.lassen19.108802.pfw", "r") as ifile2:
+        nlines2 = len(ifile2.readlines())
+
+    with open(path, "w") as f:
+        f.write("[")
+        f.write("\n")
+
+        with open(pfa_dir + "/perfflow.lassen19.108800.pfw", "r") as ifile0:
+            count = 1
+            for line in ifile0:
+                if count != 1 and count < nlines0:
+                    f.write(line.rstrip())
+                    if count == (nlines0 - 1):
+                        f.write(",")
+                    f.write("\n")
+                count += 1
+
+        with open(pfa_dir + "/perfflow.lassen19.108801.pfw", "r") as ifile1:
+            count = 1
+            for line in ifile1:
+                if count != 1 and count < nlines1:
+                    f.write(line.rstrip())
+                    if count == (nlines1 - 1):
+                        f.write(",")
+                    f.write("\n")
+                count += 1
+
+        with open(pfa_dir + "/perfflow.lassen19.108802.pfw", "r") as ifile2:
+            count = 1
+            for line in ifile2:
+                if count != 1 and count < nlines2:
+                    f.write(line.rstrip())
+                    f.write("\n")
+                count += 1
+
+        f.write("]")
+
+    return path
+
+
+@pytest.fixture
+def ams_mpi_perfflowaspect_array(data_dir, tmpdir):
+    """Builds a temporary directory containing the AMS PerfFlowAspect file."""
+    pfa_dir = os.path.join(data_dir, "perfflowaspect-ams/ams_mpi_test1")
+    write_file(data_dir)
+    pfa_file = os.path.join(pfa_dir, "ams_mpi_allranks.pfw")
+    with open(pfa_file) as f:
+        s = f.read()
+
+    shutil.copy(pfa_file, str(tmpdir))
+    tmpfile = os.path.join(str(tmpdir), "ams_mpi_allranks.pfw")
+
+    return tmpfile
+
+@pytest.fixture
+def perfflowaspectobjectreader_test_file():
+    base_dir = os.path.dirname(__file__)
+    return os.path.join(base_dir, 'data', 'perfflowaspect-object', 'object-reader-test1.pfw')

@@ -60,15 +60,11 @@ def test_ams_mpi_graphframe(ams_mpi_perfflowaspect_array):
 
     # TODO: add tests to confirm values in dataframe
     
-@pytest.fixture
-def perfflowaspectobjectreader_test_file():
-    base_dir = os.path.dirname(__file__)
-    return os.path.join(base_dir, 'data', 'perfflowaspect-ams', 'objectreader_test.pfw')
 
 def test_perfflowaspectobjectreader(perfflowaspectobjectreader_test_file):
     gf = GraphFrame.from_perfflowaspect_object(str(perfflowaspectobjectreader_test_file))
 
-    assert len(gf.dataframe.groupby("name")) > 0
+    assert len(gf.dataframe.groupby("name")) == 3
 
     for col in gf.dataframe.columns:
         if col in ("ts", "dur"):

@@ -5,6 +5,7 @@
 
 import numpy as np
 import pytest
+import os
 
 from hatchet import GraphFrame
 
@@ -83,6 +84,13 @@ def test_smoketest_perfflowaspect_array(smoketest_perfflowaspect):
 
     assert "usage_cpu" not in gf.dataframe.columns
     assert "usage_memory" not in gf.dataframe.columns
+
+    
+
+def test_perfflowaspectobjectreader(perfflowaspectobjectreader_test_file):
+    gf = GraphFrame.from_perfflowaspect_object(str(perfflowaspectobjectreader_test_file))
+
+    assert len(gf.dataframe.groupby("name")) == 3
 
     for col in gf.dataframe.columns:
         if col in ("ts", "dur"):

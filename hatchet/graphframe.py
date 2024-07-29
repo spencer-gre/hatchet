@@ -380,11 +380,18 @@ class GraphFrame:
         return HDF5Reader(filename).read(**kwargs)
 
     @staticmethod
-    def from_perfflowaspect_array(filename, scan_memory=False, scan_cpu=False):
+    def from_perfflowaspect(filename):
         # import this lazily to avoid circular dependencies
-        from .readers.perfflowaspect_array_reader import PerfFlowAspectArrayReader
+        from .readers.perfflowaspect_reader import PerfFlowAspectReader
+        
+        return PerfFlowAspectReader(filename).read()
+    
+    @staticmethod
+    def from_perfflowaspect_object(filename):
+		# import this lazily to avoid circular dependencies
+        from .readers.perfflowaspect_object_reader import PerfFlowAspectObjectReader
 
-        return PerfFlowAspectArrayReader(filename, scan_memory, scan_cpu).read()
+        return PerfFlowAspectObjectReader(filename).read()
 
     def to_hdf(self, filename, key="hatchet_graphframe", **kwargs):
         # import this lazily to avoid circular dependencies

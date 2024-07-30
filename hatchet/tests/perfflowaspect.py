@@ -5,7 +5,6 @@
 
 import numpy as np
 import pytest
-import os
 
 from hatchet import GraphFrame
 
@@ -85,7 +84,6 @@ def test_smoketest_perfflowaspect_array(smoketest_perfflowaspect):
     assert "usage_cpu" not in gf.dataframe.columns
     assert "usage_memory" not in gf.dataframe.columns
 
-    
 
 def test_perfflowaspectobjectreader(perfflowaspectobjectreader_test_file):
     gf = GraphFrame.from_perfflowaspect_object(str(perfflowaspectobjectreader_test_file))
@@ -239,7 +237,6 @@ def test_smoketest_three_perfflowaspect_stats(smoketest_three_perfflowaspect_sta
         elif col in ("name", "ph"):
             assert gf.dataframe[col].dtype == object
 
-            
 
 def test_perfflowaspectobjectreader_timestamp_conversion(perfflowaspectobjectreader_test_file):
     gf = GraphFrame.from_perfflowaspect_object(str(perfflowaspectobjectreader_test_file))

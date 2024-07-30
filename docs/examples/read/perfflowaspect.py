@@ -15,7 +15,7 @@ if __name__ == "__main__":
 
     # gf = ht.GraphFrame.from_perfflowaspect_array(pfa_file, False, False)
     # pfa_file = "../../../hatchet/tests/data/laghos_1iter.pfw"
-    pfa_file = "../../../hatchet/tests/data/perfflowaspect-object/object-reader.pfw"
+    pfa_file = "../../../hatchet/tests/data/perfflowaspect-object/object-reader-test1.pfw"
 
     gf = ht.GraphFrame.from_perfflowaspect_object(pfa_file)
 

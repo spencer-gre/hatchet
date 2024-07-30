@@ -73,3 +73,19 @@ def test_perfflowaspectobjectreader(perfflowaspectobjectreader_test_file):
             assert gf.dataframe[col].dtype == np.int64
         elif col in ("name", "ph"):
             assert gf.dataframe[col].dtype == object
+            
+
+def test_perfflowaspectobjectreader_timestamp_conversion(perfflowaspectobjectreader_test_file):
+    gf = GraphFrame.from_perfflowaspect_object(str(perfflowaspectobjectreader_test_file))
+
+    def us_to_s(microseconds):
+        return microseconds / 1e6
+
+    gf.dataframe['ts_s'] = gf.dataframe['ts'].apply(us_to_s)
+    gf.dataframe['dur_s'] = gf.dataframe['dur'].apply(us_to_s)
+
+    for _, row in gf.dataframe.iterrows():
+        assert row['ts_s'] == row['ts'] / 1e6
+        assert row['dur_s'] == row['dur'] / 1e6
+
+    print(gf.dataframe[['ts', 'ts_s', 'dur', 'dur_s']])
